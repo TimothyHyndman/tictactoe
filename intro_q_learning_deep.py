@@ -11,10 +11,13 @@ import gym
 from tensorflow.keras import Sequential
 from tensorflow.keras.layers import Dense, Embedding, Reshape
 from tensorflow.keras.optimizers import Adam
+from tensorflow.keras.models import load_model
+
+MODEL_LOCATION = "checkpoint"
 
 
 class Agent:
-    def __init__(self, env, optimizer):
+    def __init__(self, env, optimizer, pre_trained_model=None):
         self._state_size = env.observation_space.n
         self._action_size = env.action_space.n
         self._optimizer = optimizer
@@ -27,9 +30,13 @@ class Agent:
         self.gamma = 0.6
         self.epsilon = 0.1
 
-        self.q_network = self._build_compile_model()
-        self.target_network = self._build_compile_model()
-        self.align_target_model()
+        if pre_trained_model is not None:
+            self.q_network = load_model(pre_trained_model)
+            self.target_network = load_model(pre_trained_model)
+        else:
+            self.q_network = self._build_compile_model()
+            self.target_network = self._build_compile_model()
+            self.align_target_model()
 
     def store(self, state, action, reward, next_state, terminated):
         self.experience_replay.append((state, action, reward, next_state, terminated))
@@ -67,6 +74,7 @@ class Agent:
                 t = self.target_network.predict(next_state)
                 target[0][action] = reward + self.gamma * np.max(t)
 
+            # TODO: Why are we training one observation at a time?
             self.q_network.fit(state, target, epochs=1, verbose=0)
 
 
@@ -75,12 +83,12 @@ def main():
     env.render()
 
     optimizer = Adam(learning_rate=0.01)
-    agent = Agent(env, optimizer)
+    agent = Agent(env, optimizer, pre_trained_model=MODEL_LOCATION)
 
     agent.q_network.summary()
 
     batch_size = 32
-    num_of_episodes = 100
+    num_of_episodes = 1000
     timesteps_per_episode = 1000
 
     for episode in range(0, num_of_episodes):
@@ -104,11 +112,11 @@ def main():
         if len(agent.experience_replay) > batch_size:
             agent.retrain(batch_size)
 
-        if episode % 10 == 0:
+        if (episode + 1) % 10 == 0:
             print("**********************************")
             print("Episode: {}".format(episode + 1))
             env.render()
-            agent.q_network.save("checkpoint")
+            agent.q_network.save(MODEL_LOCATION)
             print("**********************************")
 
 
