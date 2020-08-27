@@ -1,6 +1,8 @@
 """
 Deep Q learning AI for tic-tac-toe
 """
+from collections import deque
+import random
 import tensorflow as tf
 
 from game import GameEnv
@@ -51,6 +53,8 @@ class BigBrain:
         self.q_network = self._build_compile_model()
         self.target_network = self._build_compile_model()
         self.align_target_model()
+        self.experience_replay = deque(maxlen=2000)
+        self.gamma = 0.6
 
     def _build_compile_model(self):
         """
@@ -87,42 +91,76 @@ class BigBrain:
         action = (row, col)
         return action
 
+    def store(self, state, action, reward, next_state, terminated):
+        self.experience_replay.append((state, action, reward, next_state, terminated))
+
+    def retrain(self, batch_size):
+        minibatch = random.sample(self.experience_replay, min(batch_size, len(self.experience_replay)))
+
+        for state, action, reward, next_state, terminated in minibatch:
+            state_reshape = np.expand_dims(state, axis=0)
+            target = self.q_network.predict(state_reshape)
+            target_reshape = np.reshape(target, (3, 3))
+            if terminated:
+                target_reshape[action] = reward
+            else:
+                next_state_reshape = np.expand_dims(state, axis=0)
+                t = self.target_network.predict(next_state_reshape)
+                target_reshape[action] = reward + self.gamma * np.max(t)
+
+            target = np.reshape(target_reshape, (1, 9))
+            # TODO: Why are we training one observation at a time?
+            self.q_network.fit(state_reshape, target, epochs=1, verbose=0)
+
+
+WIN_REWARD = 10
+DRAW_REWARD = -1
+LOSS_REWARD = -10
+
 
 def main():
-    env = GameEnv()
     big_brain = BigBrain()
     tiny_brain = TinyBrain()
 
-    state = env.state()
-    possible_actions = env.possible_actions()
-
-    big_brain.act(state, possible_actions)
-    tiny_brain.act(possible_actions)
-
-    env.render()
-    time.sleep(1)
-
+    episode = 1
     while True:
-        state = env.state()
-        possible_actions = env.possible_actions()
-        x, y = big_brain.act(state, possible_actions)
-        env.play_move(x, y)
-        env.check_win()
-        env.render()
-        time.sleep(1)
+        env = GameEnv()
+        while True:
+            state = env.state()
+            possible_actions = env.possible_actions()
+            move1 = big_brain.act(state, possible_actions)
+            x, y = move1
+            env.play_move(x, y)
+            env.check_win()
 
-        if env.winner or env.draw:
-            break
+            if env.winner:
+                big_brain.store(state, move1, reward=WIN_REWARD, next_state=env.state(), terminated=True)
+                break
+            if env.draw:
+                big_brain.store(state, move1, reward=DRAW_REWARD, next_state=env.state(), terminated=True)
+                break
 
-        possible_actions = env.possible_actions()
-        x, y = tiny_brain.act(possible_actions)
-        env.play_move(x, y)
-        env.check_win()
-        env.render()
-        time.sleep(1)
+            possible_actions = env.possible_actions()
+            x, y = tiny_brain.act(possible_actions)
+            env.play_move(x, y)
+            env.check_win()
 
-        if env.winner or env.draw:
-            break
+            if env.winner:
+                big_brain.store(state, move1, reward=LOSS_REWARD, next_state=env.state(), terminated=True)
+                break
+            if env.draw:
+                big_brain.store(state, move1, reward=DRAW_REWARD, next_state=env.state(), terminated=True)
+                break
+
+            # No result
+            big_brain.store(state, move1, reward=0, next_state=env.state(), terminated=False)
+
+        print(env.winner)
+        big_brain.retrain(batch_size=32)
+        if episode % 10 == 0:
+            print("aligning target model")
+            big_brain.align_target_model()
+        episode += 1
 
 
 if __name__ == '__main__':
