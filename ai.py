@@ -1,18 +1,16 @@
 """
 Deep Q learning AI for tic-tac-toe
 """
+
 from collections import deque
 import random
-import tensorflow as tf
 
 from game import GameEnv
 import numpy as np
-import time
 
 import tensorflow as tf
 from tensorflow.keras import Sequential
 from tensorflow.keras.layers import Dense, Input, Flatten
-from tensorflow.keras.models import load_model
 
 
 # Player 1 plays
@@ -50,8 +48,7 @@ class BigBrain:
     def __init__(self, tryhard_mode=False, load_model=None):
         self._action_size = 9  # there are 9 possible moves in tic-tac-toe
         self._input_shape = (3, 3, 2)  # 2 lots of a 3x3 board (one for each player's moves)
-
-        self.experience_replay = deque(maxlen=200)
+        self.experience_replay = deque(maxlen=5 * 40)  # past results last no more than 40 games
         self.gamma = 0.6
         self.tryhard_mode = tryhard_mode
 
@@ -71,6 +68,7 @@ class BigBrain:
         model = Sequential([
             Input(shape=self._input_shape),
             Flatten(),
+            Dense(32, activation='relu'),
             Dense(32, activation='relu'),
             Dense(self._action_size)
         ])
@@ -100,7 +98,10 @@ class BigBrain:
             row, col = np.unravel_index(np.argmax(probabilities), probabilities.shape)
         else:
             # Random select move with probabilities as given
-            row, col = np.unravel_index(np.argmax(~(np.cumsum(probabilities.flatten()) < np.random.rand())), probabilities.shape)
+            row, col = np.unravel_index(
+                np.argmax(~(np.cumsum(probabilities.flatten()) < np.random.rand())),
+                probabilities.shape
+            )
 
         action = (row, col)
         return action
@@ -143,22 +144,23 @@ class BigBrain:
 
 WIN_REWARD = 10
 DRAW_REWARD = 0
-LOSS_REWARD = -10
+LOSS_REWARD = -50
 
 
 def main():
-    big_brain = BigBrain(tryhard_mode=True, load_model='my_model.h5')
+    initial_preferences = None
+
     tiny_brain = TinyBrain()
+    model_name = "models/model_001_32_32_random_opponent.h5"
+    big_brain = BigBrain(tryhard_mode=True, load_model=model_name)
+    # big_brain = BigBrain()
 
     episode = 1
-    wins = 0
-    draws = 0
-    losses = 0
+    results = []
     while True:
         env = GameEnv()
         if not big_brain.tryhard_mode:
             initial_preferences = big_brain.move_probabilities(env.state(), env.possible_actions())
-            print(initial_preferences)
         while True:
             state = env.state()
             possible_actions = env.possible_actions()
@@ -168,11 +170,11 @@ def main():
             env.check_win()
 
             if env.winner:
-                wins += 1
+                results.append(1)
                 big_brain.store(state, move1, possible_actions, reward=WIN_REWARD, next_state=env.state(), terminated=True)
                 break
             if env.draw:
-                draws += 1
+                results.append(0)
                 big_brain.store(state, move1, possible_actions, reward=DRAW_REWARD, next_state=env.state(), terminated=True)
                 break
 
@@ -181,29 +183,35 @@ def main():
             env.check_win()
 
             if env.winner:
-                losses += 1
+                results.append(-1)
                 big_brain.store(state, move1, possible_actions, reward=LOSS_REWARD, next_state=env.state(), terminated=True)
                 break
             if env.draw:
-                draws += 1
+                results.append(0)
                 big_brain.store(state, move1, reward=DRAW_REWARD, next_state=env.state(), terminated=True)
                 break
 
             # No result
             big_brain.store(state, move1, possible_actions, reward=0, next_state=env.state(), terminated=False)
 
-        print(f"Win rate: {wins / (wins + draws + losses)}")
-        print(f"Loss rate: {losses / (wins + draws + losses)}")
-        print(f"Draw rate: {draws / (wins + draws + losses)}")
+        no_results = 100
+        wins = len([res for res in results[-no_results:] if res == 1])
+        draws = len([res for res in results[-no_results:] if res == 0])
+        losses = len([res for res in results[-no_results:] if res == -1])
+        print(f"Win rate: {wins / no_results}")
+        print(f"Loss rate: {losses / no_results}")
+        print(f"Draw rate: {draws / no_results}")
 
         if not big_brain.tryhard_mode:
-            if len(big_brain.experience_replay) > 32:
-                big_brain.retrain(batch_size=32)
+            if len(big_brain.experience_replay) > 8:
+                big_brain.retrain(batch_size=8)
             if episode % 10 == 0:
-                print("aligning target model")
+                print("Aligning target model")
                 big_brain.align_target_model()
-                # print("Saving model")
-                # big_brain.save('my_model.h5')
+                print(f"Evaluation of starting move after {episode} games:")
+                print(initial_preferences)
+                print("Saving model")
+                big_brain.save(model_name)
 
         episode += 1
 
