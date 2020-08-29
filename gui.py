@@ -5,109 +5,111 @@ Adapted from https://www.geeksforgeeks.org/tic-tac-toe-gui-in-python-using-pygam
 """
 
 import sys
-import math
 import pygame as pg
-from typing import Tuple
-from game import Game
 
+from game import GameEnv
+from players import HumanPlayer, AIPlayer
 
-# declaring the global variables
-width = 400
-height = 400
 white = (255, 255, 255)
-x_positions = {0: 30, 1: int(width / 3) + 30, 2: int(width / 3) * 2 + 30}
-y_positions = {0: 30, 1: int(height / 3) + 30, 2: int(height / 3) * 2 + 30}
-line_color = (0, 0, 0)
-fps = 144
-
-# initializing the pygame window
-pg.init()
-CLOCK = pg.time.Clock()
-screen = pg.display.set_mode((width, height + 100), 0, 32)
-pg.display.set_caption("Tic Tac Toe")
-
-# loading the images as python object
-x_img = pg.image.load("images/X_modified.png")
-y_img = pg.image.load("images/o_modified.png")
-x_img = pg.transform.scale(x_img, (80, 80))
-o_img = pg.transform.scale(y_img, (80, 80))
 
 
-def draw_status(game):
+class GameGUI(GameEnv):
+    def __init__(self, player1, player2):
+        super().__init__()
+        self.width = 400
+        self.height = 400
+        self.x_positions = {0: 30, 1: int(self.width / 3) + 30, 2: int(self.width / 3) * 2 + 30}
+        self.y_positions = {0: 30, 1: int(self.height / 3) + 30, 2: int(self.height / 3) * 2 + 30}
+        self.line_color = (0, 0, 0)
+        self.fps = 144
 
-    if game.winner is None:
-        message = f"Player {game.xo}'s Turn"
-    else:
-        message = f"Player {game.winner} won!"
-    if game.draw:
-        message = "Game Drawn"
+        self.player1 = player1
+        self.player2 = player2
 
-    # setting a font object
-    font = pg.font.Font(None, 30)
+        # initializing the pygame window
+        pg.init()
+        self.CLOCK = pg.time.Clock()
+        self.screen = pg.display.set_mode((self.width, self.height + 100), 0, 32)
+        pg.display.set_caption("Tic Tac Toe")
 
-    # setting the font properties like
-    # color and width of the text
-    text = font.render(message, 1, (255, 255, 255))
+        # loading the images as python object
+        x_img = pg.image.load("images/X_modified.png")
+        y_img = pg.image.load("images/o_modified.png")
+        self.x_img = pg.transform.scale(x_img, (80, 80))
+        self.o_img = pg.transform.scale(y_img, (80, 80))
 
-    # copy the rendered message onto the board
-    # creating a small block at the bottom of the main display
-    screen.fill((0, 0, 0), (0, 400, 500, 100))
-    text_rect = text.get_rect(center=(int(width / 2), 500 - 50))
-    screen.blit(text, text_rect)
-    pg.display.update()
+    def draw_status(self):
 
+        if self.winner is None:
+            message = f"Player {self.xo}'s Turn"
+        else:
+            message = f"Player {self.winner} won!"
+        if self.draw:
+            message = "Game Drawn"
 
-def draw_xo(row, col, xo):
-    if row in y_positions.keys() and col in x_positions.keys():
-        posy = y_positions[row]
-        posx = x_positions[col]
-        if xo == 1:
-            screen.blit(x_img, (posy, posx))
-        elif xo == -1:
-            screen.blit(o_img, (posy, posx))
+        # setting a font object
+        font = pg.font.Font(None, 30)
 
+        # setting the font properties like
+        # color and width of the text
+        text = font.render(message, 1, (255, 255, 255))
 
-def draw_board(board):
-    screen.fill(white)
+        # copy the rendered message onto the board
+        # creating a small block at the bottom of the main display
+        self.screen.fill((0, 0, 0), (0, 400, 500, 100))
+        text_rect = text.get_rect(center=(int(self.width / 2), 500 - 50))
+        self.screen.blit(text, text_rect)
+        pg.display.update()
 
-    # drawing vertical lines
-    pg.draw.line(screen, line_color, (int(width / 3), 0), (int(width / 3), height), 7)
-    pg.draw.line(screen, line_color, (int(width / 3 * 2), 0), (int(width / 3 * 2), height), 7)
+    def draw_xo(self, row, col, xo):
+        if row in self.y_positions.keys() and col in self.x_positions.keys():
+            posy = self.y_positions[row]
+            posx = self.x_positions[col]
+            if xo == 1:
+                self.screen.blit(self.x_img, (posy, posx))
+            elif xo == -1:
+                self.screen.blit(self.o_img, (posy, posx))
 
-    # drawing horizontal lines
-    pg.draw.line(screen, line_color, (0, int(height / 3)), (width, int(height / 3)), 7)
-    pg.draw.line(screen, line_color, (0, int(height / 3 * 2)), (width, int(height / 3 * 2)), 7)
+    def draw_board(self):
+        self.screen.fill(white)
 
-    for row in range(3):
-        for column in range(3):
-            draw_xo(row, column, board[row, column])
+        # drawing vertical lines
+        pg.draw.line(self.screen, self.line_color, (int(self.width / 3), 0), (int(self.width / 3), self.height), 7)
+        pg.draw.line(self.screen, self.line_color, (int(self.width / 3 * 2), 0), (int(self.width / 3 * 2), self.height), 7)
 
+        # drawing horizontal lines
+        pg.draw.line(self.screen, self.line_color, (0, int(self.height / 3)), (self.width, int(self.height / 3)), 7)
+        pg.draw.line(self.screen, self.line_color, (0, int(self.height / 3 * 2)), (self.width, int(self.height / 3 * 2)), 7)
 
-def user_click() -> Tuple[int, int]:
-    x, y = pg.mouse.get_pos()
-    col = math.floor(3 * x / width)
-    row = math.floor(3 * y / width)
+        for row in range(3):
+            for column in range(3):
+                self.draw_xo(row, column, self.board[row, column])
 
-    return col, row
+    def game_loop(self):
+        self.draw_board()
+        self.draw_status()
+        while True:
+            for event in pg.event.get():
+                if event.type == pg.QUIT:
+                    pg.quit()
+                    sys.exit()
+            if not (self.winner or self.draw):
+                if self.xo == 1:
+                    x, y = self.player1.select_move(self)
+                    self.play_move(x, y)
+                elif self.xo == -1:
+                    x, y = self.player2.select_move(self)
+                    self.play_move(x, y)
+                self.check_win()
+                self.draw_board()
+                self.draw_status()
+                pg.display.update()
+            self.CLOCK.tick(self.fps)  # TODO: Figure out how this fits in. Do I need it?
 
 
 if __name__ == '__main__':
-    current_game = Game()
-    draw_board(current_game.board)
-    draw_status(current_game)
-
-    while True:
-        for event in pg.event.get():
-            if event.type == pg.QUIT:
-                pg.quit()
-                sys.exit()
-            elif event.type is pg.MOUSEBUTTONDOWN:
-                x, y = user_click()
-                current_game.play_move(x, y)
-                current_game.check_win()
-                draw_board(current_game.board)
-                draw_status(current_game)
-                if current_game.winner or current_game.draw:
-                    current_game = Game()
-        pg.display.update()
-        CLOCK.tick(fps)
+    # player1 = HumanPlayer(name='Tim')
+    player1 = AIPlayer(name="Fred")
+    player2 = HumanPlayer(name='Alex')
+    current_game = GameGUI(player1=player1, player2=player2)
+    current_game.game_loop()

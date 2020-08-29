@@ -9,5 +9,5 @@ WORKDIR /app
 #    libsdl-ttf2.0-dev \
 #    libportmidi-dev
 
-COPY requirements.txt .
+COPY requirements_training.txt .
 RUN pip install -r requirements.txt

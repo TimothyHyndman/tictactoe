@@ -32,7 +32,8 @@ class TinyBrain:
     def __init__(self):
         self._board_size = (3, 3)
 
-    def act(self, possible_actions):
+    def select_move(self, game):
+        possible_actions = game.possible_actions()
         values = np.random.random(self._board_size)
         # Don't move where not possible to play
         values = values * possible_actions
@@ -90,7 +91,9 @@ class BigBrain:
 
         return np.reshape(probabilities, (3, 3))
 
-    def act(self, state, possible_actions):
+    def select_move(self, game):
+        state = game.state()
+        possible_actions = game.possible_actions()
         probabilities = self.move_probabilities(state, possible_actions)
 
         if self.tryhard_mode:
@@ -151,9 +154,9 @@ def main():
     initial_preferences = None
 
     tiny_brain = TinyBrain()
-    model_name = "models/model_001_32_32_random_opponent.h5"
-    big_brain = BigBrain(tryhard_mode=True, load_model=model_name)
-    # big_brain = BigBrain()
+    model_name = "models/model_002_32_32_random_opponent.h5"
+    # big_brain = BigBrain(tryhard_mode=True, load_model=model_name)
+    big_brain = BigBrain()
 
     episode = 1
     results = []
@@ -162,9 +165,11 @@ def main():
         if not big_brain.tryhard_mode:
             initial_preferences = big_brain.move_probabilities(env.state(), env.possible_actions())
         while True:
+            # For storing
             state = env.state()
             possible_actions = env.possible_actions()
-            move1 = big_brain.act(state, possible_actions)
+
+            move1 = big_brain.select_move(env)
             x, y = move1
             env.play_move(x, y)
             env.check_win()
@@ -178,7 +183,7 @@ def main():
                 big_brain.store(state, move1, possible_actions, reward=DRAW_REWARD, next_state=env.state(), terminated=True)
                 break
 
-            x, y = tiny_brain.act(env.possible_actions())
+            x, y = tiny_brain.select_move(env)
             env.play_move(x, y)
             env.check_win()
 
