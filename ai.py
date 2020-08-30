@@ -48,7 +48,9 @@ class BigBrain:
     """
     def __init__(self, tryhard_mode=False, load_model=None):
         self._action_size = 9  # there are 9 possible moves in tic-tac-toe
-        self._input_shape = (3, 3, 2)  # 2 lots of a 3x3 board (one for each player's moves)
+        # 2 lots of a 3x3 board (one for each player's moves) plus constant valued plane
+        # representing whose turn it is
+        self._input_shape = (3, 3, 3)
         self.experience_replay = deque(maxlen=5 * 40)  # past results last no more than 40 games
         self.gamma = 0.6
         self.tryhard_mode = tryhard_mode
@@ -147,16 +149,17 @@ class BigBrain:
 
 WIN_REWARD = 10
 DRAW_REWARD = 0
-LOSS_REWARD = -50
+LOSS_REWARD = -10
 
 
 def main():
     initial_preferences = None
 
-    tiny_brain = TinyBrain()
-    model_name = "models/model_002_32_32_random_opponent.h5"
-    # big_brain = BigBrain(tryhard_mode=True, load_model=model_name)
-    big_brain = BigBrain()
+    # tiny_brain = TinyBrain()
+    model_name = "models/model_002_32_32_self_play.h5"
+    big_brain = BigBrain(tryhard_mode=True, load_model=model_name)  # For testing accuracy
+    # big_brain = BigBrain(load_model=model_name)  # For continuing training
+    # big_brain = BigBrain()  # For starting training
 
     episode = 1
     results = []
@@ -164,46 +167,49 @@ def main():
         env = GameEnv()
         if not big_brain.tryhard_mode:
             initial_preferences = big_brain.move_probabilities(env.state(), env.possible_actions())
+
+        first_move = True
+
+        # immediate store is all the information we have immediately after a move
+        # (current state, possible actions, move)
+        immediate_store = []
+        # delayed store is all the information we get after the next move
+        # (next state, reward, terminated)
+        delayed_store = []
         while True:
-            if env.xo == 1:
-                # For storing
-                state = env.state()
-                possible_actions = env.possible_actions()
-                move1 = big_brain.select_move(env)
-                x, y = move1
-            else:
-                x, y = tiny_brain.select_move(env)
-            env.play_move(x, y)
+            state = env.state()
+            possible_actions = env.possible_actions()
+            move = big_brain.select_move(env)
+            immediate_store.append((state, move, possible_actions))
+
+            env.play_move(*move)  # Current player flips
             env.check_win()
 
-            reward = 0
-            terminated = False
-            if env.winner == 1:
-                reward = WIN_REWARD
+            next_state = env.state()
+            if env.winner or env.draw:
+                # If game has ended we need to give rewards to both players
                 terminated = True
-                results.append(1)
-            elif env.winner == -1:
-                reward = LOSS_REWARD
-                terminated = True
-                results.append(-1)
-            elif env.draw:
-                reward = DRAW_REWARD
-                terminated = True
-                results.append(0)
-
-            if terminated or env.xo == 1:
-                # Store result either after player -1 has responded to our move OR if
-                # the game has ended.
-                big_brain.store(
-                    state,
-                    move1,
-                    possible_actions,
-                    reward=reward,
-                    next_state=env.state(),
-                    terminated=terminated
-                )
+                if env.draw:
+                    results.append(0)
+                    delayed_store.append((DRAW_REWARD, next_state, terminated))
+                    delayed_store.append((DRAW_REWARD, next_state, terminated))
+                elif env.winner:
+                    results.append(env.winner)
+                    # Winner is always whoever played last
+                    delayed_store.append((LOSS_REWARD, next_state, terminated))
+                    delayed_store.append((WIN_REWARD, next_state, terminated))
+            else:
+                terminated = False
+                if not first_move:
+                    delayed_store.append((0, next_state, terminated))
+                else:
+                    # If first move then there can't have a been a move before this to
+                    # assign a reward etc to
+                    first_move = False
 
             if terminated:
+                for immediate, delayed in zip(immediate_store, delayed_store):
+                    big_brain.store(*immediate, *delayed)
                 break
 
         no_results = 100

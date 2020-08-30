@@ -51,7 +51,8 @@ class GameEnv(Game):
         Returns stack of 3x3 matrices.
         First is player 1's pieces, then player 2's pieces.
         """
-        stack = np.dstack([self.board == 1, self.board == -1])
+        player = np.ones((3, 3)) * (self.xo == 1)
+        stack = np.dstack([self.board == 1, self.board == -1, player])
         return stack
 
     def possible_actions(self):
