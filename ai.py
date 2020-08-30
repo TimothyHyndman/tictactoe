@@ -13,16 +13,9 @@ from tensorflow.keras import Sequential
 from tensorflow.keras.layers import Dense, Input, Flatten
 
 
-# Player 1 plays
-# Player 2 plays and gives reward to player 1
-# Player 1 plays and gives reward to player 2
-# .
-# .
-# .
-# Player x plays and game terminated. Both players get reward.
-
-# Simple approach
-# Player 1 plays followed immediately by random move, then give reward to player 1.
+WIN_REWARD = 1
+DRAW_REWARD = 0
+LOSS_REWARD = -1
 
 
 class TinyBrain:
@@ -71,8 +64,8 @@ class BigBrain:
         model = Sequential([
             Input(shape=self._input_shape),
             Flatten(),
-            Dense(32, activation='relu'),
-            Dense(32, activation='relu'),
+            Dense(16, activation='relu'),
+            Dense(16, activation='relu'),
             Dense(self._action_size)
         ])
         model.compile(loss='mse', optimizer="adam")
@@ -147,20 +140,7 @@ class BigBrain:
         self.q_network = tf.keras.models.load_model(filename)
 
 
-WIN_REWARD = 10
-DRAW_REWARD = 0
-LOSS_REWARD = -50
-
-
-def main():
-    # reference_player = BigBrain(tryhard_mode=False)
-    reference_player = TinyBrain()
-    model_name = "models/model_006_32_32_random_opponent_both_players.h5"
-    # candidate_player = BigBrain(load_model=model_name)  # For continuing training
-    candidate_player = BigBrain(tryhard_mode=False)  # For starting training
-
-    episode = 1
-    results = []
+def print_diagnostics(candidate_player, results, episode):
     test_env_start = GameEnv()
     test_env_about_to_win = GameEnv()
     test_env_about_to_win.play_move(0, 0)
@@ -174,6 +154,67 @@ def main():
     test_env_about_to_win_p2.play_move(1, 1)
     test_env_about_to_win_p2.play_move(2, 1)
     test_env_about_to_win_p2.play_move(1, 0)
+
+    no_results = 100
+    denom = len(results[-no_results:])
+    wins = len([res for res in results[-no_results:] if res == 1])
+    draws = len([res for res in results[-no_results:] if res == 0])
+    losses = len([res for res in results[-no_results:] if res == -1])
+    print(f"Win rate: {wins / denom}")
+    print(f"Loss rate: {losses / denom}")
+    print(f"Draw rate: {draws / denom}")
+    initial_preferences = candidate_player.move_probabilities(test_env_start.state(), test_env_start.possible_actions())
+    about_to_win_preferences = candidate_player.move_probabilities(test_env_about_to_win.state(),
+                                                                   test_env_about_to_win.possible_actions())
+    about_to_win_preferences_p2 = candidate_player.move_probabilities(
+        test_env_about_to_win_p2.state(),
+        test_env_about_to_win_p2.possible_actions()
+    )
+    print(f"Initial move preference after {episode} games")
+    print(initial_preferences)
+    print(f"Preferences when winning in top right")
+    print(about_to_win_preferences)
+    print(f"Preferences when winning in bottom left")
+    print(about_to_win_preferences_p2)
+
+
+def evaluate_candidate(candidate_player, reference_player):
+    wins = 0
+    draws = 0
+    losses = 0
+
+    for _ in range(400):
+        env = GameEnv()
+        current_player = candidate_player if random.random() < 0.5 else reference_player
+        while True:
+            move = current_player.select_move(env)
+            env.play_move(*move)  # Current player flips
+            env.check_win()
+            if env.winner and current_player is candidate_player:
+                wins += 1
+                break
+            elif env.winner and current_player is reference_player:
+                losses += 1
+                break
+            elif env.draw:
+                draws += 1
+                break
+            else:
+                current_player = reference_player if current_player is candidate_player else candidate_player
+
+    return wins, draws, losses
+
+
+def main():
+    # reference_player = BigBrain(tryhard_mode=False)
+    reference_player = TinyBrain()
+    model_name = "models/model_007_32_32_random_opponent_both_players.h5"
+    # candidate_player = BigBrain(load_model=model_name)  # For continuing training
+    candidate_player = BigBrain(tryhard_mode=False)  # For starting training
+
+    episode = 1
+    results = []
+
     while True:
         env = GameEnv()
         first_move = True
@@ -228,33 +269,30 @@ def main():
 
         if len(candidate_player.experience_replay) > 8:
             candidate_player.retrain(batch_size=8)
-        # Do some retraining and stuff
+
         if episode % 10 == 0:
-            print(f"Played {episode} games")
-            no_results = 100
-            denom = len(results[-no_results:])
-            wins = len([res for res in results[-no_results:] if res == 1])
-            draws = len([res for res in results[-no_results:] if res == 0])
-            losses = len([res for res in results[-no_results:] if res == -1])
-            print(f"Win rate: {wins / denom}")
-            print(f"Loss rate: {losses / denom}")
-            print(f"Draw rate: {draws / denom}")
-            initial_preferences = candidate_player.move_probabilities(test_env_start.state(), test_env_start.possible_actions())
-            about_to_win_preferences = candidate_player.move_probabilities(test_env_about_to_win.state(), test_env_about_to_win.possible_actions())
-            about_to_win_preferences_p2 = candidate_player.move_probabilities(
-                test_env_about_to_win_p2.state(),
-                test_env_about_to_win_p2.possible_actions()
-            )
-            print(f"Initial move preference after {episode} games")
-            print(initial_preferences)
-            print(f"Preferences when winning in top right")
-            print(about_to_win_preferences)
-            print(f"Preferences when winning in bottom left")
-            print(about_to_win_preferences_p2)
+            print_diagnostics(candidate_player, results, episode)
             print("Aligning target model")
             candidate_player.align_target_model()
             print("Saving model")
             candidate_player.save(model_name)
+
+        if episode % 1000 == 0:
+            print("Evaluating candidate against reference")
+            #  See if we can replace reference model with our new one
+            candidate_player.tryhard_mode = True
+            wins, draws, losses = evaluate_candidate(candidate_player, reference_player)
+            percentage_wins = wins / (wins + losses)
+
+            print(f"{wins}, {draws}, {losses}")
+            print(f"percentage wins: {percentage_wins}")
+
+            if percentage_wins > 0.55:
+                print("Candidate promoted to reference")
+                reference_player = candidate_player
+                candidate_player = BigBrain()
+                candidate_player.q_network = reference_player.q_network
+                candidate_player.target_network = reference_player.target_network
 
         episode += 1
 
