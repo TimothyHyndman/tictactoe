@@ -167,6 +167,13 @@ def main():
     test_env_about_to_win.play_move(2, 2)
     test_env_about_to_win.play_move(0, 1)
     test_env_about_to_win.play_move(1, 1)
+
+    test_env_about_to_win_p2 = GameEnv()
+    test_env_about_to_win_p2.play_move(0, 0)
+    test_env_about_to_win_p2.play_move(2, 2)
+    test_env_about_to_win_p2.play_move(1, 1)
+    test_env_about_to_win_p2.play_move(2, 1)
+    test_env_about_to_win_p2.play_move(1, 0)
     while True:
         env = GameEnv()
         first_move = True
@@ -178,7 +185,6 @@ def main():
         delayed_store = []
 
         # Randomly choose who goes first
-        # TODO: Uncomment this
         current_player = candidate_player if random.random() < 0.5 else reference_player
         # current_player = candidate_player  # just start by training for playing first
 
@@ -235,10 +241,16 @@ def main():
             print(f"Draw rate: {draws / denom}")
             initial_preferences = candidate_player.move_probabilities(test_env_start.state(), test_env_start.possible_actions())
             about_to_win_preferences = candidate_player.move_probabilities(test_env_about_to_win.state(), test_env_about_to_win.possible_actions())
+            about_to_win_preferences_p2 = candidate_player.move_probabilities(
+                test_env_about_to_win_p2.state(),
+                test_env_about_to_win_p2.possible_actions()
+            )
             print(f"Initial move preference after {episode} games")
             print(initial_preferences)
             print(f"Preferences when winning in top right")
             print(about_to_win_preferences)
+            print(f"Preferences when winning in bottom left")
+            print(about_to_win_preferences_p2)
             print("Aligning target model")
             candidate_player.align_target_model()
             print("Saving model")
