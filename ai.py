@@ -155,7 +155,7 @@ LOSS_REWARD = -50
 def main():
     # reference_player = BigBrain(tryhard_mode=False)
     reference_player = TinyBrain()
-    model_name = "models/model_005_32_32_self_play.h5"
+    model_name = "models/model_006_32_32_random_opponent_both_players.h5"
     # candidate_player = BigBrain(load_model=model_name)  # For continuing training
     candidate_player = BigBrain(tryhard_mode=False)  # For starting training
 
@@ -179,8 +179,8 @@ def main():
 
         # Randomly choose who goes first
         # TODO: Uncomment this
-        # current_player = candidate_player if random.random() < 0.5 else reference_player
-        current_player = candidate_player  # just start by training for playing first
+        current_player = candidate_player if random.random() < 0.5 else reference_player
+        # current_player = candidate_player  # just start by training for playing first
 
         while True:
             move = current_player.select_move(env)
