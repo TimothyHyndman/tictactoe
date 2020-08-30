@@ -40,10 +40,12 @@ class GameGUI(GameEnv):
 
     def draw_status(self):
 
+        names = {1: self.player1.name, -1: self.player2.name}
+
         if self.winner is None:
-            message = f"Player {self.xo}'s Turn"
+            message = f"{names[self.xo]}'s Turn"
         else:
-            message = f"Player {self.winner} won!"
+            message = f"{names[self.winner]} won!"
         if self.draw:
             message = "Game Drawn"
 

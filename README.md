@@ -1,15 +1,12 @@
-## Local Dev
+## Local Environment
+To install the requirements needed to play the game,
 ```shell script
-python3 -m venv ~/.virtualenvs/tictactoe
+pip install -r requirements.txt
 ```
 
-## Docker
-To get gui to run you need to run
+## Training Environment
+Training the models can be done in a docker container. Build with
 ```shell script
-xhost +local:docker
+docker-compose build training
 ```
-
-For security reasons you should follow up with 
-```shell script
-xhost -local:docker
-```
+Currently, we use this docker container for running the tutorials as well.

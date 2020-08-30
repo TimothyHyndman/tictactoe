@@ -10,4 +10,4 @@ WORKDIR /app
 #    libportmidi-dev
 
 COPY requirements_training.txt .
-RUN pip install -r requirements.txt
+RUN pip install -r requirements_training.txt
