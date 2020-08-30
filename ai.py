@@ -32,7 +32,7 @@ class TinyBrain:
     def __init__(self):
         self._board_size = 9
 
-    def select_move(self, game, explore=None):
+    def select_move(self, game):
         possible_actions = game.possible_actions()
         values = np.random.random(self._board_size)
         # Don't move where not possible to play
@@ -46,13 +46,14 @@ class BigBrain:
     """
     Defines an agent to learn and play tic-tac-toe
     """
-    def __init__(self, load_model=None):
+    def __init__(self, load_model=None, tryhard_mode=True):
         self._action_size = 9  # there are 9 possible moves in tic-tac-toe
         # 2 lots of a 3x3 board (one for each player's moves) plus constant valued plane
         # representing whose turn it is
         self._input_shape = (19,)
         self.experience_replay = deque(maxlen=9 * 40)  # past results last no more than 40 games
         self.gamma = 0.6
+        self.tryhard_mode = tryhard_mode
 
         if load_model:
             self.load(load_model)
@@ -92,12 +93,12 @@ class BigBrain:
 
         return np.reshape(probabilities, (3, 3))
 
-    def select_move(self, game, explore=False):
+    def select_move(self, game):
         state = game.state()
         possible_actions = game.possible_actions()
         probabilities = self.move_probabilities(state, possible_actions)
 
-        if not explore:
+        if self.tryhard_mode:
             # Always select highest probability move.
             row, col = np.unravel_index(np.argmax(probabilities), probabilities.shape)
         else:
@@ -125,7 +126,7 @@ class BigBrain:
             if terminated:
                 target_reshape[action] = reward
             else:
-                next_state_reshape = np.expand_dims(state, axis=0)
+                next_state_reshape = np.expand_dims(next_state, axis=0)
                 next_state_action_values = self.target_network.predict(next_state_reshape).flatten()
                 possible_next_state_actions_values = next_state_action_values[possible_actions]
                 target_reshape[action] = self.gamma * np.max(possible_next_state_actions_values)
@@ -146,58 +147,26 @@ class BigBrain:
         self.q_network = tf.keras.models.load_model(filename)
 
 
-def test_model(player, opponent):
-    draws = 0
-    wins = 0
-    losses = 0
-    for _ in range(100):
-        env = GameEnv()
-        current_player = player
-        while True:
-            # Play move
-            move = current_player.select_move(env, explore=False)
-            env.play_move(*move)
-            env.check_win()
-
-            if env.draw:
-                draws += 1
-                break
-
-            if env.winner and current_player is player:
-                wins += 1
-                break
-            if env.winner and current_player is opponent:
-                losses += 1
-                break
-
-            # switch player
-            if current_player is player:
-                current_player = opponent
-            else:
-                current_player = player
-
-    print(draws)
-    print(wins)
-    print(losses)
-
-
-WIN_REWARD = 1
+WIN_REWARD = 10
 DRAW_REWARD = 0
-LOSS_REWARD = -1
+LOSS_REWARD = -50
 
 
 def main():
-    initial_preferences = None
-    explore_prob = 0.3
-
+    # reference_player = BigBrain(tryhard_mode=False)
     reference_player = TinyBrain()
-    model_name = "models/model_004_32_32_self_play.h5"
-    # big_brain = BigBrain(tryhard_mode=True, load_model=model_name)  # For testing accuracy
-    candidate_player = BigBrain(load_model=model_name)  # For continuing training
-    # big_brain = BigBrain()  # For starting training
+    model_name = "models/model_005_32_32_self_play.h5"
+    # candidate_player = BigBrain(load_model=model_name)  # For continuing training
+    candidate_player = BigBrain(tryhard_mode=False)  # For starting training
 
     episode = 1
     results = []
+    test_env_start = GameEnv()
+    test_env_about_to_win = GameEnv()
+    test_env_about_to_win.play_move(0, 0)
+    test_env_about_to_win.play_move(2, 2)
+    test_env_about_to_win.play_move(0, 1)
+    test_env_about_to_win.play_move(1, 1)
     while True:
         env = GameEnv()
         first_move = True
@@ -207,62 +176,73 @@ def main():
         # delayed store is all the information we get after the next move
         # (next state, reward, terminated)
         delayed_store = []
-        # player_tracker = []
-        # player_tracker2 = []
+
+        # Randomly choose who goes first
+        # TODO: Uncomment this
+        # current_player = candidate_player if random.random() < 0.5 else reference_player
+        current_player = candidate_player  # just start by training for playing first
+
         while True:
-            state = env.state()
-            explore = random.random() < (1 - explore_prob)
-            move = candidate_player.select_move(env, explore)
-            immediate_store.append((state, move, explore))
-            # player_tracker.append(env.xo)
+            move = current_player.select_move(env)
+            if current_player is candidate_player:
+                immediate_store.append((env.state(), move))
 
             env.play_move(*move)  # Current player flips
             env.check_win()
 
-            next_state = env.state()
-            possible_actions = env.possible_actions()
-            next_state_opponent = env.state(player=-env.xo)
             if env.winner or env.draw:
                 # If game has ended we need to give rewards to both players
-                terminated = True
-
                 if env.draw:
+                    delayed_store.append((None, DRAW_REWARD, None, True))
                     results.append(0)
-                    delayed_store.append((None, DRAW_REWARD, next_state, terminated))
-                    delayed_store.append((None, DRAW_REWARD, next_state_opponent, terminated))
-                elif env.winner:
-                    results.append(env.winner)
+                elif current_player is candidate_player:
                     # Winner is always whoever played last
-                    delayed_store.append((None, LOSS_REWARD, next_state, terminated))
-                    delayed_store.append((None, WIN_REWARD, next_state_opponent, terminated))
+                    delayed_store.append((None, WIN_REWARD, None, True))
+                    results.append(1)
+                else:
+                    delayed_store.append((None, LOSS_REWARD, None, True))
+                    results.append(-1)
 
                 for immediate, delayed in zip(immediate_store, delayed_store):
-                    state, move, explore = immediate
-                    if not explore:
-                        candidate_player.store(state, move, *delayed)
-                # print(player_tracker)
-                # print(player_tracker2)
+                    candidate_player.store(*immediate, *delayed)
                 break
             elif first_move:
                 # If first move then there can't have a been a move before this to
                 # assign a reward etc to
                 first_move = False
-            else:
-                # Just the usual update for the previous move
+            elif current_player is reference_player:
+                # Finish providing information for candidate player's last move
+                next_state = env.state()  # note that this state is from the point of
+                # view of the candidate player since the env automatically switches
+                # player after a move
+                possible_actions = env.possible_actions()
                 delayed_store.append((possible_actions, 0, next_state, False))
-                # player_tracker2.append(env.xo)
 
-        if len(candidate_player.experience_replay) > 18:
-            candidate_player.retrain(batch_size=18)
+            current_player = reference_player if current_player is candidate_player else candidate_player
+
+        if len(candidate_player.experience_replay) > 8:
+            candidate_player.retrain(batch_size=8)
+        # Do some retraining and stuff
         if episode % 10 == 0:
+            print(f"Played {episode} games")
+            no_results = 100
+            denom = len(results[-no_results:])
+            wins = len([res for res in results[-no_results:] if res == 1])
+            draws = len([res for res in results[-no_results:] if res == 0])
+            losses = len([res for res in results[-no_results:] if res == -1])
+            print(f"Win rate: {wins / denom}")
+            print(f"Loss rate: {losses / denom}")
+            print(f"Draw rate: {draws / denom}")
+            initial_preferences = candidate_player.move_probabilities(test_env_start.state(), test_env_start.possible_actions())
+            about_to_win_preferences = candidate_player.move_probabilities(test_env_about_to_win.state(), test_env_about_to_win.possible_actions())
+            print(f"Initial move preference after {episode} games")
+            print(initial_preferences)
+            print(f"Preferences when winning in top right")
+            print(about_to_win_preferences)
             print("Aligning target model")
             candidate_player.align_target_model()
-            print(f"Evaluation of starting move after {episode} games:")
-            print(initial_preferences)
             print("Saving model")
             candidate_player.save(model_name)
-
-            test_model(candidate_player, reference_player)
 
         episode += 1
 
