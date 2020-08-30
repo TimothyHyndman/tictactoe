@@ -46,17 +46,20 @@ class Game:
 
 class GameEnv(Game):
     """A wrapper around Game inspired by the OpenAI gym environments"""
-    def state(self):
+    def state(self, player=None):
         """
-        Returns stack of 3x3 matrices.
-        First is player 1's pieces, then player 2's pieces.
+        Returns flattened stack of 3x3 matrices.
+        First is player's pieces, then opponent's pieces,
+        Finally a single element: 1 for player 1 or 0 for player 2
         """
-        player = np.ones((3, 3)) * (self.xo == 1)
-        stack = np.dstack([self.board == 1, self.board == -1, player])
-        return stack
+        if not player:
+            player = self.xo
+
+        state = np.hstack([(self.board == player).flatten(), (self.board == -player).flatten(), player == 1])
+        return state
 
     def possible_actions(self):
-        return self.board == 0
+        return (self.board == 0).flatten()
 
     def render(self):
         print(f'{self.board[0][0]}|{self.board[0][1]}|{self.board[0][2]}')

@@ -38,7 +38,10 @@ class HumanPlayer(Player):
 class AIPlayer(Player):
     def __init__(self, name):
         super().__init__(name=name)
-        self.ai = BigBrain(tryhard_mode=True, load_model='models/model_001_32_32_random_opponent.h5')
+        self.ai = BigBrain(
+            # load_model='models/model_001_32_32_random_opponent.h5'
+            load_model="models/model_003_32_32_self_play.h5"
+        )
 
     def select_move(self, game):
         return self.ai.select_move(game)
