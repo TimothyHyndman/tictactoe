@@ -165,39 +165,46 @@ def main():
         if not big_brain.tryhard_mode:
             initial_preferences = big_brain.move_probabilities(env.state(), env.possible_actions())
         while True:
-            # For storing
-            state = env.state()
-            possible_actions = env.possible_actions()
-
-            move1 = big_brain.select_move(env)
-            x, y = move1
+            if env.xo == 1:
+                # For storing
+                state = env.state()
+                possible_actions = env.possible_actions()
+                move1 = big_brain.select_move(env)
+                x, y = move1
+            else:
+                x, y = tiny_brain.select_move(env)
             env.play_move(x, y)
             env.check_win()
 
-            if env.winner:
+            reward = 0
+            terminated = False
+            if env.winner == 1:
+                reward = WIN_REWARD
+                terminated = True
                 results.append(1)
-                big_brain.store(state, move1, possible_actions, reward=WIN_REWARD, next_state=env.state(), terminated=True)
-                break
-            if env.draw:
-                results.append(0)
-                big_brain.store(state, move1, possible_actions, reward=DRAW_REWARD, next_state=env.state(), terminated=True)
-                break
-
-            x, y = tiny_brain.select_move(env)
-            env.play_move(x, y)
-            env.check_win()
-
-            if env.winner:
+            elif env.winner == -1:
+                reward = LOSS_REWARD
+                terminated = True
                 results.append(-1)
-                big_brain.store(state, move1, possible_actions, reward=LOSS_REWARD, next_state=env.state(), terminated=True)
-                break
-            if env.draw:
+            elif env.draw:
+                reward = DRAW_REWARD
+                terminated = True
                 results.append(0)
-                big_brain.store(state, move1, reward=DRAW_REWARD, next_state=env.state(), terminated=True)
-                break
 
-            # No result
-            big_brain.store(state, move1, possible_actions, reward=0, next_state=env.state(), terminated=False)
+            if terminated or env.xo == 1:
+                # Store result either after player -1 has responded to our move OR if
+                # the game has ended.
+                big_brain.store(
+                    state,
+                    move1,
+                    possible_actions,
+                    reward=reward,
+                    next_state=env.state(),
+                    terminated=terminated
+                )
+
+            if terminated:
+                break
 
         no_results = 100
         wins = len([res for res in results[-no_results:] if res == 1])

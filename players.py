@@ -23,7 +23,8 @@ class Player:
 
 
 class HumanPlayer(Player):
-    def select_move(self, game):
+    @staticmethod
+    def select_move(game):
         while True:
             for event in pg.event.get():
                 if event.type == pg.QUIT:

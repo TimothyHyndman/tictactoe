@@ -76,12 +76,36 @@ class GameGUI(GameEnv):
         self.screen.fill(white)
 
         # drawing vertical lines
-        pg.draw.line(self.screen, self.line_color, (int(self.width / 3), 0), (int(self.width / 3), self.height), 7)
-        pg.draw.line(self.screen, self.line_color, (int(self.width / 3 * 2), 0), (int(self.width / 3 * 2), self.height), 7)
+        pg.draw.line(
+            self.screen,
+            self.line_color,
+            (int(self.width / 3), 0),
+            (int(self.width / 3), self.height),
+            7
+        )
+        pg.draw.line(
+            self.screen,
+            self.line_color,
+            (int(self.width / 3 * 2), 0),
+            (int(self.width / 3 * 2), self.height),
+            7
+        )
 
         # drawing horizontal lines
-        pg.draw.line(self.screen, self.line_color, (0, int(self.height / 3)), (self.width, int(self.height / 3)), 7)
-        pg.draw.line(self.screen, self.line_color, (0, int(self.height / 3 * 2)), (self.width, int(self.height / 3 * 2)), 7)
+        pg.draw.line(
+            self.screen,
+            self.line_color,
+            (0, int(self.height / 3)),
+            (self.width, int(self.height / 3)),
+            7
+        )
+        pg.draw.line(
+            self.screen,
+            self.line_color,
+            (0, int(self.height / 3 * 2)),
+            (self.width, int(self.height / 3 * 2)),
+            7
+        )
 
         for row in range(3):
             for column in range(3):
@@ -110,8 +134,8 @@ class GameGUI(GameEnv):
 
 
 if __name__ == '__main__':
-    # player1 = HumanPlayer(name='Tim')
-    player1 = AIPlayer(name="Fred")
-    player2 = HumanPlayer(name='Alex')
-    current_game = GameGUI(player1=player1, player2=player2)
+    # p1 = HumanPlayer(name='Tim')
+    p1 = AIPlayer(name="Fred")
+    p2 = HumanPlayer(name='Alex')
+    current_game = GameGUI(player1=p1, player2=p2)
     current_game.game_loop()
