@@ -15,7 +15,7 @@ from tensorflow.keras.layers import Dense, Input, Flatten
 
 WIN_REWARD = 1
 DRAW_REWARD = 0
-LOSS_REWARD = -1
+LOSS_REWARD = -5
 
 
 class TinyBrain:
@@ -44,9 +44,10 @@ class BigBrain:
         # 2 lots of a 3x3 board (one for each player's moves) plus constant valued plane
         # representing whose turn it is
         self._input_shape = (19,)
-        self.experience_replay = deque(maxlen=9 * 40)  # past results last no more than 40 games
+        self.experience_replay = deque(maxlen=100*5)  # past results last no more than 100 games
         self.gamma = 0.6
         self.tryhard_mode = tryhard_mode
+        self.alpha = 0.2
 
         if load_model:
             self.load(load_model)
@@ -64,8 +65,11 @@ class BigBrain:
         model = Sequential([
             Input(shape=self._input_shape),
             Flatten(),
-            Dense(16, activation='relu'),
-            Dense(16, activation='relu'),
+            Dense(64, activation='relu'),
+            Dense(64, activation='relu'),
+            Dense(64, activation='relu'),
+            # Dense(32, activation='relu'),
+            # Dense(32, activation='relu'),
             Dense(self._action_size)
         ])
         model.compile(loss='mse', optimizer="adam")
@@ -86,12 +90,14 @@ class BigBrain:
 
         return np.reshape(probabilities, (3, 3))
 
-    def select_move(self, game):
+    def select_move(self, game, explore=None):
         state = game.state()
         possible_actions = game.possible_actions()
         probabilities = self.move_probabilities(state, possible_actions)
 
-        if self.tryhard_mode:
+        if explore is None:
+            explore = not self.tryhard_mode
+        if not explore:
             # Always select highest probability move.
             row, col = np.unravel_index(np.argmax(probabilities), probabilities.shape)
         else:
@@ -207,10 +213,12 @@ def evaluate_candidate(candidate_player, reference_player):
 
 def main():
     # reference_player = BigBrain(tryhard_mode=False)
+    model_name = "models/model_009_64_64_64_random_opponent_both_players.h5"
+    model_name_reference = "models/reference.h5"
     reference_player = TinyBrain()
-    model_name = "models/model_007_32_32_random_opponent_both_players.h5"
-    # candidate_player = BigBrain(load_model=model_name)  # For continuing training
-    candidate_player = BigBrain(tryhard_mode=False)  # For starting training
+    # reference_player = BigBrain(load_model=model_name, tryhard_mode=False)  # For continuing training
+    candidate_player = BigBrain(load_model=model_name, tryhard_mode=False)  # For continuing training
+    # candidate_player = BigBrain(tryhard_mode=False)  # For starting training
 
     episode = 1
     results = []
@@ -230,9 +238,19 @@ def main():
         # current_player = candidate_player  # just start by training for playing first
 
         while True:
+            state = env.state()
             move = current_player.select_move(env)
             if current_player is candidate_player:
-                immediate_store.append((env.state(), move))
+                if first_move:
+                    first_move = False
+                else:
+                    # Finish providing information for candidate player's last move
+                    possible_actions = env.possible_actions()
+                    delayed_store.append((possible_actions, 0, state, False))
+                # Provide starting information for candidate player's current move
+                do_explore = random.random() < 0.3
+                move = current_player.select_move(env, explore=do_explore)
+                immediate_store.append((state, move, do_explore))
 
             env.play_move(*move)  # Current player flips
             env.check_win()
@@ -251,48 +269,44 @@ def main():
                     results.append(-1)
 
                 for immediate, delayed in zip(immediate_store, delayed_store):
-                    candidate_player.store(*immediate, *delayed)
+                    state, move, do_explore = immediate
+                    if not do_explore:
+                        candidate_player.store(state, move, *delayed)
                 break
-            elif first_move:
-                # If first move then there can't have a been a move before this to
-                # assign a reward etc to
-                first_move = False
-            elif current_player is reference_player:
-                # Finish providing information for candidate player's last move
-                next_state = env.state()  # note that this state is from the point of
-                # view of the candidate player since the env automatically switches
-                # player after a move
-                possible_actions = env.possible_actions()
-                delayed_store.append((possible_actions, 0, next_state, False))
 
             current_player = reference_player if current_player is candidate_player else candidate_player
 
-        if len(candidate_player.experience_replay) > 8:
-            candidate_player.retrain(batch_size=8)
-
-        if episode % 10 == 0:
-            print_diagnostics(candidate_player, results, episode)
+        if episode % 100 == 0:
+            print(episode)
+        if episode % 100 == 0:
+            print("Training")
+            candidate_player.retrain(batch_size=50)
             print("Aligning target model")
             candidate_player.align_target_model()
             print("Saving model")
             candidate_player.save(model_name)
+            print_diagnostics(candidate_player, results, episode)
 
-        if episode % 1000 == 0:
-            print("Evaluating candidate against reference")
-            #  See if we can replace reference model with our new one
-            candidate_player.tryhard_mode = True
-            wins, draws, losses = evaluate_candidate(candidate_player, reference_player)
-            percentage_wins = wins / (wins + losses)
-
-            print(f"{wins}, {draws}, {losses}")
-            print(f"percentage wins: {percentage_wins}")
-
-            if percentage_wins > 0.55:
-                print("Candidate promoted to reference")
-                reference_player = candidate_player
-                candidate_player = BigBrain()
-                candidate_player.q_network = reference_player.q_network
-                candidate_player.target_network = reference_player.target_network
+        # if episode % 1000 == 0:
+        #     print("Evaluating candidate against reference")
+        #     # print_diagnostics(candidate_player, results, episode)
+        #      # See if we can replace reference model with our new one
+        #     # candidate_player.tryhard_mode = True
+        #     wins, draws, losses = evaluate_candidate(candidate_player, reference_player)
+        #     print(f"{wins}, {draws}, {losses}")
+        #     if wins + losses > 0:
+        #         percentage_wins = wins / (wins + losses)
+        #     else:
+        #         percentage_wins = 0
+        #     print(f"percentage wins: {percentage_wins}")
+        #
+        #     if percentage_wins > 0.55:
+        #         print("Candidate promoted to reference")
+        #         reference_player = candidate_player
+        #         candidate_player.save(model_name_reference)
+        #         candidate_player = BigBrain(tryhard_mode=False)
+        #         candidate_player.q_network = reference_player.q_network
+        #         candidate_player.target_network = reference_player.target_network
 
         episode += 1
 
