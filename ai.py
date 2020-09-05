@@ -287,9 +287,6 @@ def main():
             candidate_player.save(model_name)
             print_diagnostics(candidate_player, results, episode)
 
-            if episode >= 300:
-                break
-
         # if episode % 1000 == 0:
         #     print("Evaluating candidate against reference")
         #     # print_diagnostics(candidate_player, results, episode)
