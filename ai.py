@@ -82,7 +82,7 @@ class BigBrain:
     def move_probabilities(self, state, possible_actions):
         # Need to add "batch" dimension
         state_reshape = np.expand_dims(state, axis=0)
-        predictions = self.q_network.predict(state_reshape)
+        predictions = self.q_network(state_reshape, training=False)
 
         probabilities = tf.nn.softmax(predictions).numpy()
         probabilities = probabilities * possible_actions
@@ -120,13 +120,13 @@ class BigBrain:
         targets = []
         for state, action, possible_actions, reward, next_state, terminated in minibatch:
             state_reshape = np.expand_dims(state, axis=0)
-            target = self.q_network.predict(state_reshape)
+            target = self.q_network(state_reshape, training=False).numpy()
             target_reshape = np.reshape(target, (3, 3))
             if terminated:
                 target_reshape[action] = reward
             else:
                 next_state_reshape = np.expand_dims(next_state, axis=0)
-                next_state_action_values = self.target_network.predict(next_state_reshape).flatten()
+                next_state_action_values = self.target_network(next_state_reshape, training=False).numpy().flatten()
                 possible_next_state_actions_values = next_state_action_values[possible_actions]
                 target_reshape[action] = self.gamma * np.max(possible_next_state_actions_values)
 
@@ -213,12 +213,12 @@ def evaluate_candidate(candidate_player, reference_player):
 
 def main():
     # reference_player = BigBrain(tryhard_mode=False)
-    model_name = "models/model_009_64_64_64_random_opponent_both_players.h5"
+    model_name = "models/model_010_64_64_64_self_play.h5"
     model_name_reference = "models/reference.h5"
     reference_player = TinyBrain()
     # reference_player = BigBrain(load_model=model_name, tryhard_mode=False)  # For continuing training
-    candidate_player = BigBrain(load_model=model_name, tryhard_mode=False)  # For continuing training
-    # candidate_player = BigBrain(tryhard_mode=False)  # For starting training
+    # candidate_player = BigBrain(load_model=model_name, tryhard_mode=False)  # For continuing training
+    candidate_player = BigBrain(tryhard_mode=False)  # For starting training
 
     episode = 1
     results = []
@@ -286,6 +286,9 @@ def main():
             print("Saving model")
             candidate_player.save(model_name)
             print_diagnostics(candidate_player, results, episode)
+
+            if episode >= 300:
+                break
 
         # if episode % 1000 == 0:
         #     print("Evaluating candidate against reference")
