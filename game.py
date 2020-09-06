@@ -50,12 +50,11 @@ class GameEnv(Game):
         """
         Returns flattened stack of 3x3 matrices.
         First is player's pieces, then opponent's pieces,
-        Finally a single element: 1 for player 1 or 0 for player 2
         """
         if not player:
             player = self.xo
 
-        state = np.hstack([(self.board == player).flatten(), (self.board == -player).flatten(), player == 1])
+        state = np.dstack([(self.board == player), (self.board == -player)])
         return state
 
     def possible_actions(self):

@@ -10,7 +10,7 @@ import numpy as np
 
 import tensorflow as tf
 from tensorflow.keras import Sequential
-from tensorflow.keras.layers import Dense, Input, Flatten
+from tensorflow.keras.layers import Dense, Input, Flatten, Conv2D
 
 
 WIN_REWARD = 1
@@ -49,7 +49,7 @@ class BigBrain:
         self._action_size = 9  # there are 9 possible moves in tic-tac-toe
         # 2 lots of a 3x3 board (one for each player's moves) plus constant valued plane
         # representing whose turn it is
-        self._input_shape = (19,)
+        self._input_shape = (3, 3, 2)
         self.experience_replay = deque(maxlen=experience_replay_len)
         self.gamma = 0.6
         self.tryhard_mode = tryhard_mode
@@ -70,10 +70,16 @@ class BigBrain:
         """
         model = Sequential([
             Input(shape=self._input_shape),
+            # 4 output filters, and a convolutional window of 2x2
+            Conv2D(filters=16, kernel_size=(2, 2), activation='linear'),
+            # Conv2D(filters=16, kernel_size=(2, 2)),
+            # Conv2D(filters=16, kernel_size=(2, 2)),
+            # Conv2D(filters=16, kernel_size=(2, 2)),
+            # Dense(64, activation='relu'),
+            # Dense(64, activation='relu'),
+            # Dense(64, activation='relu'),
+            Conv2D(1, (1, 1), activation='linear'),
             Flatten(),
-            Dense(64, activation='relu'),
-            Dense(64, activation='relu'),
-            Dense(64, activation='relu'),
             Dense(self._action_size)
         ])
         model.compile(loss='mse', optimizer="adam")
@@ -213,7 +219,7 @@ def evaluate_candidate(candidate_player, reference_player):
 
 
 def main():
-    model_name = "models/model_temp_self_play.h5"
+    model_name = "models/model_conv.h5"
     reference_player = TinyBrain()
     # candidate_player = BigBrain(load_model=model_name, tryhard_mode=False)  # For continuing training
     candidate_player = BigBrain(tryhard_mode=False)  # For starting training
