@@ -39,7 +39,7 @@ class AIPlayer(Player):
     def __init__(self, name):
         super().__init__(name=name)
         self.ai = BigBrain(
-            load_model="models/model_009_64_64_64_random_opponent_both_players.h5"
+            load_model="models/model_temp_self_play.h5"
         )
 
     def select_move(self, game):

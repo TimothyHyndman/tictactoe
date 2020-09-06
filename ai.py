@@ -17,6 +17,12 @@ WIN_REWARD = 1
 DRAW_REWARD = 0
 LOSS_REWARD = -5
 
+GAMES_PER_SET = 250
+# TRAINING_SIZE = 32
+TRAINING_SIZE = 128
+MEMORY_SIZE = 5000
+# MEMORY_SIZE = 1000
+
 
 class TinyBrain:
     """
@@ -39,7 +45,7 @@ class BigBrain:
     """
     Defines an agent to learn and play tic-tac-toe
     """
-    def __init__(self, load_model=None, tryhard_mode=True, experience_replay_len=5000):
+    def __init__(self, load_model=None, tryhard_mode=True, experience_replay_len=MEMORY_SIZE):
         self._action_size = 9  # there are 9 possible moves in tic-tac-toe
         # 2 lots of a 3x3 board (one for each player's moves) plus constant valued plane
         # representing whose turn it is
@@ -68,8 +74,6 @@ class BigBrain:
             Dense(64, activation='relu'),
             Dense(64, activation='relu'),
             Dense(64, activation='relu'),
-            # Dense(32, activation='relu'),
-            # Dense(32, activation='relu'),
             Dense(self._action_size)
         ])
         model.compile(loss='mse', optimizer="adam")
@@ -137,7 +141,7 @@ class BigBrain:
 
         states = np.vstack(states)
         targets = np.vstack(targets)
-        self.q_network.fit(states, targets, verbose=0)
+        self.q_network.fit(states, targets, verbose=0, batch_size=32)
 
     def save(self, filename='my_model.h5'):
         self.q_network.save(filename)
@@ -209,17 +213,10 @@ def evaluate_candidate(candidate_player, reference_player):
 
 
 def main():
-    n_games_per_set = 250
-    minibatch_size = 32
-    experience_replay_len = 5000
-
-    # reference_player = BigBrain(tryhard_mode=False)
-    model_name = "models/model_010_64_64_64_self_play.h5"
-    model_name_reference = "models/reference.h5"
+    model_name = "models/model_temp_self_play.h5"
     reference_player = TinyBrain()
-    # reference_player = BigBrain(load_model=model_name, tryhard_mode=False)  # For continuing training
     # candidate_player = BigBrain(load_model=model_name, tryhard_mode=False)  # For continuing training
-    candidate_player = BigBrain(tryhard_mode=False, experience_replay_len=experience_replay_len)  # For starting training
+    candidate_player = BigBrain(tryhard_mode=False)  # For starting training
 
     episode = 1
     while True:
@@ -234,7 +231,6 @@ def main():
 
         # Randomly choose who goes first
         current_player = candidate_player if random.random() < 0.5 else reference_player
-        # current_player = candidate_player  # just start by training for playing first
 
         while True:
             state = env.state()
@@ -272,18 +268,24 @@ def main():
 
             current_player = reference_player if current_player is candidate_player else candidate_player
 
-        if episode % n_games_per_set == 0:
+        if episode % GAMES_PER_SET == 0:
             print(f"Training after {episode} episodes")
-            candidate_player.retrain(batch_size=minibatch_size)
+            candidate_player.retrain(batch_size=TRAINING_SIZE)
             candidate_player.align_target_model()
             candidate_player.save(model_name)
-            wins, draws, losses = evaluate_candidate(candidate_player, reference_player)
+            wins, draws, losses = evaluate_candidate(candidate_player, TinyBrain())
             print(f"{wins}, {draws}, {losses}")
             if wins + losses > 0:
                 percentage_wins = wins / (wins + losses)
             else:
                 percentage_wins = 0
             print(f"percentage wins: {percentage_wins}")
+
+            reference_player = candidate_player
+            reference_player.tryhard_mode = False
+            candidate_player = BigBrain(tryhard_mode=False)
+            candidate_player.q_network = reference_player.q_network
+            candidate_player.align_target_model()
 
         episode += 1
 
