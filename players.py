@@ -30,7 +30,7 @@ class HumanPlayer(Player):
                 if event.type == pg.QUIT:
                     pg.quit()
                     sys.exit()
-                elif event.type is pg.MOUSEBUTTONDOWN:
+                elif event.type == pg.MOUSEBUTTONDOWN:
                     x, y = user_click(game.width)
                     return x, y
 
@@ -40,6 +40,7 @@ class AIPlayer(Player):
         super().__init__(name=name)
         self.ai = BigBrain(
             load_model="models/model_temp_self_play.h5"
+            # load_model="models/model_001_32_32_random_opponent.h5"
         )
 
     def select_move(self, game):

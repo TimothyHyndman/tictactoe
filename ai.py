@@ -70,7 +70,7 @@ class BigBrain:
         """
         model = Sequential([
             Input(shape=self._input_shape),
-            Flatten(),
+            # Flatten(),
             Dense(64, activation='relu'),
             Dense(64, activation='relu'),
             Dense(64, activation='relu'),
@@ -273,19 +273,23 @@ def main():
             candidate_player.retrain(batch_size=TRAINING_SIZE)
             candidate_player.align_target_model()
             candidate_player.save(model_name)
+            print(f"Candidate player retraining complete, now running evaluation")
             wins, draws, losses = evaluate_candidate(candidate_player, TinyBrain())
-            print(f"{wins}, {draws}, {losses}")
+            print(f"Candidate player had {wins} wins, {draws} draws, and {losses} losses")
             if wins + losses > 0:
                 percentage_wins = wins / (wins + losses)
             else:
                 percentage_wins = 0
-            print(f"percentage wins: {percentage_wins}")
+            print(f"Out of all games with a result, candidate won {int(100* percentage_wins)}%")
 
+            print("Updating reference player to candidate player")
             reference_player = candidate_player
             reference_player.tryhard_mode = False
             candidate_player = BigBrain(tryhard_mode=False)
             candidate_player.q_network = reference_player.q_network
             candidate_player.align_target_model()
+
+            print("Playing some more games now :)")
 
         episode += 1
 

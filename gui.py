@@ -137,5 +137,5 @@ if __name__ == '__main__':
     # p1 = HumanPlayer(name='Tim')
     p2 = AIPlayer(name="Fred")
     p1 = HumanPlayer(name='Alex')
-    current_game = GameGUI(player1=p1, player2=p2)
+    current_game = GameGUI(player1=p2, player2=p1)
     current_game.game_loop()
